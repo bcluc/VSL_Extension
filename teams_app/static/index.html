@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VSL Letters</title>
+<script src="https://unpkg.com/@microsoft/teams-js@2.24.0/dist/MicrosoftTeams.min.js" crossorigin="anonymous"></script>
+<style>
+  :root {
+    --bg: #f5f5f5; --card: #ffffff; --text: #242424; --muted: #616161;
+    --line: #e0e0e0; --brand: #5b5fc7; --brand-soft: #e8ebfa;
+    --ok: #13a10e; --warn: #c19c00; --track: #ebebeb;
+  }
+  :root[data-theme="dark"] {
+    --bg: #1f1f1f; --card: #292929; --text: #ffffff; --muted: #adadad;
+    --line: #3d3d3d; --brand: #7f85f5; --brand-soft: #2f2f4a;
+    --ok: #54b054; --warn: #e9c46a; --track: #3d3d3d;
+  }
+  :root[data-theme="contrast"] {
+    --bg: #000; --card: #000; --text: #fff; --muted: #fff;
+    --line: #fff; --brand: #ffff01; --brand-soft: #000;
+    --ok: #3ff23f; --warn: #ffff01; --track: #333;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme]) {
+      --bg: #1f1f1f; --card: #292929; --text: #ffffff; --muted: #adadad;
+      --line: #3d3d3d; --brand: #7f85f5; --brand-soft: #2f2f4a;
+      --ok: #54b054; --warn: #e9c46a; --track: #3d3d3d;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.4 "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 16px; }
+  header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  header h1 { font-size: 18px; font-weight: 600; margin: 0; }
+  header .sub { color: var(--muted); font-size: 13px; }
+  .grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 14px; }
+  .stage { position: relative; aspect-ratio: 4 / 3; background: #000; border-radius: 6px; overflow: hidden; }
+  .stage video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); display: block; }
+  .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .stage .empty {
+    position: absolute; inset: 0; display: flex; flex-direction: column; gap: 10px;
+    align-items: center; justify-content: center; color: #ddd; text-align: center; padding: 20px;
+  }
+  .stage .empty[hidden], .err[hidden] { display: none; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 12px; }
+  button, select {
+    font: inherit; border-radius: 4px; border: 1px solid var(--line);
+    background: var(--card); color: var(--text); padding: 6px 12px; cursor: pointer;
+  }
+  button.primary { background: var(--brand); border-color: var(--brand); color: #fff; font-weight: 600; }
+  :root[data-theme="contrast"] button.primary { color: #000; }
+  button:disabled { opacity: .5; cursor: default; }
+  label.inline { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+  input[type=range] { accent-color: var(--brand); }
+  .stat { color: var(--muted); font-size: 12px; margin-left: auto; font-variant-numeric: tabular-nums; }
+  .result { text-align: center; padding: 6px 0 12px; }
+  .letter { font-size: 84px; font-weight: 700; line-height: 1.05; color: var(--brand); min-height: 90px; }
+  .letter.dim { color: var(--muted); font-size: 18px; font-weight: 400; display: flex; align-items: center; justify-content: center; }
+  .bar { height: 8px; background: var(--track); border-radius: 4px; overflow: hidden; margin: 8px 0 4px; }
+  .bar > i { display: block; height: 100%; width: 0; background: var(--ok); transition: width .15s; }
+  .pct { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 14px 0 8px; font-weight: 600; }
+  .topk { list-style: none; margin: 0; padding: 0; }
+  .topk li { display: grid; grid-template-columns: 52px 1fr 44px; gap: 8px; align-items: center; margin: 5px 0; }
+  .topk .mini { height: 6px; background: var(--track); border-radius: 3px; overflow: hidden; }
+  .topk .mini > i { display: block; height: 100%; background: var(--brand); }
+  .topk .v { text-align: right; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .typed {
+    min-height: 44px; border: 1px dashed var(--line); border-radius: 6px; padding: 8px 10px;
+    font-size: 20px; letter-spacing: .06em; word-break: break-all; background: var(--brand-soft);
+  }
+  .typed:empty::before { content: "Giữ một ký hiệu ~1 giây để gõ…"; color: var(--muted); font-size: 13px; letter-spacing: 0; }
+  .row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .err { color: #c50f1f; font-size: 13px; margin-top: 8px; }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Nhận dạng Ký hiệu Tiếng Việt (VSL)</h1>
+    <span class="sub">Chữ cái tĩnh · landmark bàn tay (MediaPipe) + MLP · chạy cục bộ</span>
+  </header>
+
+  <div class="grid">
+    <section class="card">
+      <div class="stage" id="stage">
+        <video id="video" playsinline muted></video>
+        <canvas id="overlay"></canvas>
+        <div class="empty" id="empty">
+          <div>Camera đang tắt</div>
+          <button class="primary" id="startBtn2">Bật camera</button>
+        </div>
+      </div>
+      <div class="controls">
+        <button class="primary" id="startBtn">Bật camera</button>
+        <button id="pauseBtn" disabled>Tạm dừng</button>
+        <span class="inline" id="modelName">—</span>
+        <label class="inline">Ngưỡng
+          <input type="range" id="thr" min="0.2" max="0.9" step="0.05" value="0.6">
+          <span id="thrVal">0.60</span>
+        </label>
+        <span class="stat" id="stat">—</span>
+      </div>
+      <div class="err" id="err" hidden></div>
+    </section>
+
+    <aside class="card">
+      <div class="result">
+        <div class="letter dim" id="letter">Không thấy tay</div>
+        <div class="bar"><i id="confBar"></i></div>
+        <div class="pct" id="confPct">&nbsp;</div>
+      </div>
+
+      <h2>Top 3</h2>
+      <ul class="topk" id="topk"></ul>
+
+      <h2>Văn bản</h2>
+      <div class="typed" id="typed"></div>
+      <div class="row">
+        <button id="spaceBtn">Dấu cách</button>
+        <button id="backBtn">Xóa 1 ký tự</button>
+        <button id="clearBtn">Xóa hết</button>
+      </div>
+      <div class="hint">Ảnh webcam chỉ gửi tới server trên máy này (localhost), không lưu lại.</div>
+    </aside>
+  </div>
+</div>
+
+<script>
+(() => {
+  // ── Teams integration (optional: page also works in a normal browser) ─────
+  const root = document.documentElement;
+  const setTheme = t => { root.dataset.theme = t === "default" ? "light" : t; };
+  if (window.microsoftTeams && new URLSearchParams(location.search).has("inTeams")) {
+    microsoftTeams.app.initialize().then(() => {
+      microsoftTeams.app.getContext().then(ctx => setTheme(ctx.app.theme));
+      microsoftTeams.app.registerOnThemeChangeHandler(setTheme);
+      microsoftTeams.app.notifySuccess();
+    }).catch(e => console.warn("Teams SDK init failed", e));
+  }
+
+  // ── Settings (same defaults as scripts/live_letter_demo.py) ───────────────
+  const SMOOTH_WINDOW = 6;      // frames in the vote buffer
+  const HOLD_MS = 800;          // how long a letter must be stable to be typed
+  const MODIFIERS = { MU: { A: "Â", E: "Ê", O: "Ô" }, RAU: { O: "Ơ", U: "Ư" } };
+  const CONNECTIONS = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[0,9],[9,10],[10,11],[11,12],
+    [0,13],[13,14],[14,15],[15,16],[0,17],[17,18],[18,19],[19,20],[5,9],[9,13],[13,17]];
+
+  const $ = id => document.getElementById(id);
+  const video = $("video"), overlay = $("overlay"), octx = overlay.getContext("2d");
+  const grab = document.createElement("canvas"), gctx = grab.getContext("2d");
+
+  let stream = null, running = false, paused = false;
+  let buf = [];                 // [{id,label,conf}]
+  let lastLetter = null, stableSince = 0, typedLetter = null;
+  let fpsT = performance.now(), fpsN = 0, fps = 0;
+
+  // ── Model ─────────────────────────────────────────────────────────────────
+  fetch("api/models").then(r => r.json()).then(d => {
+    $("modelName").textContent = d.ready ? d.name : "Chưa có mô hình";
+    if (!d.ready) showErr("Chưa train mô hình chữ cái: chạy scripts/record_letters.py rồi scripts/train_letter_classifier.py, sau đó khởi động lại server.");
+  }).catch(() => showErr("Không kết nối được server. Hãy chạy: python teams_app/server.py"));
+
+  $("thr").oninput = e => { $("thrVal").textContent = (+e.target.value).toFixed(2); };
+
+  // ── Camera ────────────────────────────────────────────────────────────────
+  async function start() {
+    hideErr();
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false });
+    } catch (e) {
+      showErr("Không mở được camera (" + e.name + "). Trong Teams, hãy cho phép quyền Camera cho ứng dụng này.");
+      return;
+    }
+    video.srcObject = stream;
+    await video.play();
+    $("empty").hidden = true;
+    $("startBtn").textContent = "Tắt camera";
+    $("pauseBtn").disabled = false;
+    running = true; paused = false;
+    fpsT = performance.now(); fpsN = 0;
+    loop();
+  }
+  function stop() {
+    running = false;
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    stream = null; video.srcObject = null;
+    $("empty").hidden = false;
+    $("startBtn").textContent = "Bật camera";
+    $("pauseBtn").disabled = true; $("pauseBtn").textContent = "Tạm dừng";
+    octx.clearRect(0, 0, overlay.width, overlay.height);
+  }
+  $("startBtn").onclick = () => running ? stop() : start();
+  $("startBtn2").onclick = start;
+  $("pauseBtn").onclick = () => {
+    paused = !paused; $("pauseBtn").textContent = paused ? "Tiếp tục" : "Tạm dừng";
+    if (!paused) loop();
+  };
+
+  // ── Main loop: one request in flight at a time ────────────────────────────
+  async function loop() {
+    if (!running || paused) return;
+    const w = video.videoWidth, h = video.videoHeight;
+    if (!w) { setTimeout(loop, 50); return; }
+    grab.width = w; grab.height = h;
+    // Send the mirrored (selfie) view: the model is trained on mirrored frames
+    gctx.setTransform(-1, 0, 0, 1, w, 0);
+    gctx.drawImage(video, 0, 0, w, h);
+    const blob = await new Promise(r => grab.toBlob(r, "image/jpeg", 0.85));
+    try {
+      const res = await fetch("api/predict",
+                              { method: "POST", body: blob, headers: { "Content-Type": "image/jpeg" } });
+      if (!res.ok) {
+        const detail = await res.json().then(j => j.detail).catch(() => null);
+        throw new Error(detail || "HTTP " + res.status);
+      }
+      const d = await res.json();
+      hideErr();
+      update(d, w, h);
+    } catch (e) {
+      showErr("Lỗi gọi server: " + e.message);
+      await new Promise(r => setTimeout(r, 1000));
+    }
+    setTimeout(loop, 0);
+  }
+
+  // ── Rendering ─────────────────────────────────────────────────────────────
+  function update(d, w, h) {
+    fpsN++;
+    const now = performance.now();
+    if (now - fpsT >= 500) { fps = fpsN * 1000 / (now - fpsT); fpsT = now; fpsN = 0; }
+    $("stat").textContent = `${d.model} · ${fps.toFixed(1)} khung/s · ${d.ms} ms`;
+
+    drawOverlay(d);
+    if (!d.hand) {
+      setLetter(null, "Không thấy tay"); $("topk").innerHTML = "";
+      lastLetter = null; typedLetter = null;   // lowering the hand allows a repeated letter
+      return;
+    }
+    buf.push(d.top[0]); if (buf.length > SMOOTH_WINDOW) buf.shift();
+
+    // Confidence-weighted vote over the last frames
+    const votes = {}, names = {};
+    for (const p of buf) { votes[p.id] = (votes[p.id] || 0) + p.conf; names[p.id] = p.label; }
+    const best = Object.keys(votes).reduce((a, b) => votes[a] >= votes[b] ? a : b);
+    const score = votes[best] / buf.length;
+    const thr = +$("thr").value;
+
+    if (score >= thr) {
+      setLetter(names[best], null, score);
+      if (best !== lastLetter) { lastLetter = best; stableSince = now; }
+      else if (now - stableSince >= HOLD_MS && typedLetter !== best) {
+        appendLetter(best, names[best]); typedLetter = best;
+      }
+    } else {
+      setLetter(null, "Độ tin cậy thấp…", score);
+      lastLetter = null;
+    }
+    $("topk").innerHTML = d.top.map(p =>
+      `<li><b>${p.label}</b><span class="mini"><i style="width:${(p.conf*100).toFixed(1)}%"></i></span>` +
+      `<span class="v">${(p.conf*100).toFixed(0)}%</span></li>`).join("");
+  }
+
+  function setLetter(letter, msg, score = 0) {
+    const el = $("letter");
+    if (letter) { el.className = "letter"; el.textContent = letter; el.style.fontSize = letter.length > 1 ? "56px" : ""; }
+    else { el.className = "letter dim"; el.textContent = msg; el.style.fontSize = ""; }
+    $("confBar").style.width = (score * 100).toFixed(1) + "%";
+    $("confBar").style.background = score >= 0.9 ? "var(--ok)" : "var(--warn)";
+    $("confPct").textContent = score ? (score * 100).toFixed(1) + "%" : " ";
+  }
+
+  function drawOverlay(d) {
+    const r = overlay.getBoundingClientRect(), dpr = devicePixelRatio || 1;
+    overlay.width = r.width * dpr; overlay.height = r.height * dpr;
+    octx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    octx.clearRect(0, 0, r.width, r.height);
+    if (!d.hand) return;
+    // Video uses object-fit: cover; map normalized coords into the visible area
+    const vw = video.videoWidth, vh = video.videoHeight;
+    const s = Math.max(r.width / vw, r.height / vh);
+    const ox = (r.width - vw * s) / 2, oy = (r.height - vh * s) / 2;
+    const P = ([x, y]) => [ox + x * vw * s, oy + y * vh * s];
+    const [bx0, by0] = P([d.bbox[0], d.bbox[1]]), [bx1, by1] = P([d.bbox[2], d.bbox[3]]);
+    octx.strokeStyle = "#ffb900"; octx.lineWidth = 2; octx.strokeRect(bx0, by0, bx1 - bx0, by1 - by0);
+    const pts = d.landmarks.map(P);
+    octx.strokeStyle = "#00c86e"; octx.lineWidth = 2;
+    for (const [a, b] of CONNECTIONS) {
+      octx.beginPath(); octx.moveTo(...pts[a]); octx.lineTo(...pts[b]); octx.stroke();
+    }
+    octx.fillStyle = "#00ffb4";
+    for (const [x, y] of pts) { octx.beginPath(); octx.arc(x, y, 3.5, 0, Math.PI * 2); octx.fill(); }
+  }
+
+  // ── Typed text ────────────────────────────────────────────────────────────
+  // "Mũ" / "Râu" modify the previous letter (Â Ê Ô / Ơ Ư), as in signbridge/letters/labels.py
+  function appendLetter(id, label) {
+    const el = $("typed"), t = el.textContent;
+    if (MODIFIERS[id]) {
+      const prev = t.slice(-1), m = MODIFIERS[id][prev.toUpperCase()];
+      if (m) el.textContent = t.slice(0, -1) + (prev === prev.toUpperCase() ? m : m.toLowerCase());
+      return;
+    }
+    el.textContent = t + label;
+  }
+  $("spaceBtn").onclick = () => { $("typed").textContent += " "; };
+  $("backBtn").onclick = () => { $("typed").textContent = $("typed").textContent.slice(0, -1); };
+  $("clearBtn").onclick = () => { $("typed").textContent = ""; buf = []; };
+
+  function showErr(m) { $("err").textContent = m; $("err").hidden = false; }
+  function hideErr() { $("err").hidden = true; }
+})();
+</script>
+</body>
+</html>

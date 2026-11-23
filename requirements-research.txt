@@ -1,0 +1,12 @@
+# SignBridge (signbridge/, scripts/, teams_app/). Versions validated: see docs/validation_report.md
+numpy
+opencv-python
+torch
+torchvision
+mediapipe       # hand/pose landmarks: letters, ASL demo, pose path; models via scripts/fetch_mediapipe_models.py
+pillow          # live demo UI text (Vietnamese diacritics)
+pytest
+pywin32         # optional: English speech via Windows SAPI (ASL demo)
+piper-tts>=1.5  # Vietnamese TTS (GPL-3.0-or-later); voice via scripts/fetch_tts_voice.py
+fastapi         # optional: teams_app/
+uvicorn         # optional: teams_app/

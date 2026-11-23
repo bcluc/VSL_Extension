@@ -1,0 +1,16 @@
+# SignBridge research pipeline: never commit datasets, generated outputs or new model files
+datasets/
+outputs/
+*.mp4
+*.zip
+*.tar.gz
+__pycache__/
+.pytest_cache/
+
+*.pyc
+.venv/
+
+# Model files live in ../models (fetch_mediapipe_models.py, train_*.py), never in Git
+*.pth
+*.pt
+*.task
