@@ -19,7 +19,13 @@ been measured with a live webcam user.**
   * `scripts/live_letter_demo.py` runs on the webcam;
   * the Teams tab (`teams_app/`) serves the same recognizer;
   * both refuse to recognise without a trained model.
-* **Status:** no letters recorded, no model trained, **no accuracy measured**.
+* **`scripts/import_letter_images.py`** converts image folders to landmark takes;
+  `--train-only-signer` keeps such a signer in training only.
+* **First offline results** with 2 signers (25 static letters; details in
+  [docs/ai_validation_status.md](docs/ai_validation_status.md) §3):
+  * about 50 % frame top-1 on an unseen signer;
+  * 68.9 % on a later take of a training signer.
+  * Live accuracy has not been measured.
 
 ### ASL greetings demo (`signbridge/signs/`, `scripts/live_sign_demo.py`)
 
@@ -59,5 +65,5 @@ been measured with a live webcam user.**
 
 ### Tests
 
-* 143 tests, all passing on 2026-11-23 (`python -m pytest`).
+* 146 tests, all passing on 2026-11-24 (`python -m pytest`).
 * The tests that need How2Sign, PHOENIX or the Piper voice are skipped when those are absent.

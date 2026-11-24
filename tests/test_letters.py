@@ -40,11 +40,24 @@ def test_features_ignore_position_and_size():
     np.testing.assert_allclose(a, b, atol=1e-4)
 
 
-def test_left_hand_is_mirrored_onto_right():
+def test_features_ignore_unreliable_handedness_label():
+    h = _hand(3)
+    np.testing.assert_allclose(letter_features(h, False, 1.0), letter_features(h, True, 1.0))
+
+
+def test_optional_label_mirroring_maps_left_onto_right():
     h = _hand(3)
     mirrored = h.copy()
     mirrored[:, 0] = 1.0 - mirrored[:, 0]
-    np.testing.assert_allclose(letter_features(h, False, 1.0), letter_features(mirrored, True, 1.0), atol=1e-5)
+    np.testing.assert_allclose(letter_features(h, False, 1.0, mirror_left=True),
+                               letter_features(mirrored, True, 1.0, mirror_left=True), atol=1e-5)
+
+
+def test_augment_mirror_is_a_horizontal_flip_about_the_wrist():
+    h = _hand(4)[None]
+    m = augment(h, np.random.default_rng(0), rot_deg=0, jitter=0, scale=0, mirror_p=1.0)
+    np.testing.assert_allclose(m[0, :, 0], 2 * h[0, 0, 0] - h[0, :, 0], atol=1e-6)
+    np.testing.assert_allclose(m[0, :, 1:], h[0, :, 1:], atol=1e-6)
 
 
 def test_augment_keeps_shape_and_changes_points():
@@ -133,8 +146,12 @@ def test_split_holds_out_whole_takes(tmp_path):
     assert [len(sp[k]) for k in ("train", "val", "test")] == [4, 2, 2]
     names = {k: {t.path for t in v} for k, v in sp.items()}
     assert not (names["train"] & names["test"]) and not (names["val"] & names["test"])
+    two = [t for t in load_takes(tmp_path) if t.label == "A"][:2]
+    sp2 = split_takes(two, None)                      # 2 takes: no val, newest -> test
+    assert [len(sp2[k]) for k in ("train", "val", "test")] == [1, 0, 1]
+    assert sp2["test"][0].path.name > sp2["train"][0].path.name
     with pytest.raises(SystemExit):
-        split_takes(load_takes(tmp_path)[:2], None)   # only 2 takes of A
+        split_takes(two[:1], None)                    # 1 take is not enough
 
 
 def test_classifier_learns_separable_synthetic_letters():
@@ -152,3 +169,14 @@ def test_classifier_learns_separable_synthetic_letters():
         torch.nn.functional.cross_entropy(m(feats), y).backward()
         opt.step()
     assert (m.eval()(feats).argmax(1) == y).float().mean() > 0.95
+
+
+def test_train_only_signer_goes_to_train(tmp_path):
+    sys.path.insert(0, str(REPO / "scripts"))
+    from train_letter_classifier import split_takes
+    for _ in range(2):
+        save_take(tmp_path, "s01", "A", [_hand(0)] * 3, [False] * 3, 1.0, 20.0)
+    save_take(tmp_path, "ext", "A", [_hand(1)] * 3, [False] * 3, 1.0, 0.0)   # 1 take only
+    sp = split_takes(load_takes(tmp_path), None, {"ext"})
+    assert {t.signer for t in sp["test"]} == {"s01"}
+    assert sorted(t.signer for t in sp["train"]) == ["ext", "s01"]

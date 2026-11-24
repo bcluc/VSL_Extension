@@ -5,9 +5,13 @@
 
 Split (whole takes, never frames of the same take on both sides):
 * default: per signer and letter, the newest take -> test, the next newest -> val, the rest ->
-  train (needs >= 3 takes per letter). With a single signer this measures how well the model
+  train (>= 3 takes per letter). If any letter has only 2 takes, there is no val set for any
+  letter: newest -> test, the rest -> train, and the weights after the last epoch are kept
+  (nothing is selected on the test set). With a single signer this measures how well the model
   recognises **that signer** later on, not a new person: it overestimates accuracy for others.
 * ``--test-signer``: every take of that signer -> test (a real unseen-signer check).
+* ``--train-only-signer``: every take of these signers -> train (e.g. imported data with one
+  take per letter); they never appear in val or test.
 
 Writes ../models/letters/vsl_letters.pt (outside Git) and outputs/letters/train_report.json.
 """
@@ -36,26 +40,32 @@ DEFAULT_OUT = REPO.parent / "models" / "letters" / "vsl_letters.pt"
 REPORT = REPO / "outputs" / "letters" / "train_report.json"
 
 
-def split_takes(takes: list[Take], test_signer: str | None) -> dict[str, list[Take]]:
+def split_takes(takes: list[Take], test_signer: str | None,
+                train_only: set[str] | frozenset = frozenset()) -> dict[str, list[Take]]:
     out: dict[str, list[Take]] = {"train": [], "val": [], "test": []}
     groups: dict[tuple[str, str], list[Take]] = defaultdict(list)
     for t in takes:
         if test_signer and t.signer == test_signer:
             out["test"].append(t)
+        elif t.signer in train_only:
+            out["train"].append(t)
         else:
             groups[(t.signer, t.label)].append(t)
+    with_val = test_signer is None and all(len(g) >= 3 for g in groups.values())
     for (signer, label), g in sorted(groups.items()):
         g = sorted(g, key=lambda t: t.path.name)
-        need = 2 if test_signer else 3
-        if len(g) < need:
-            raise SystemExit(f"{signer}/{label}: {len(g)} takes, need at least {need}. Record more.")
+        if len(g) < 2:
+            raise SystemExit(f"{signer}/{label}: {len(g)} take(s), need at least 2. Record more.")
         if test_signer:
             out["val"].append(g[-1])
             out["train"].extend(g[:-1])
-        else:
+        elif with_val:
             out["test"].append(g[-1])
             out["val"].append(g[-2])
             out["train"].extend(g[:-2])
+        else:
+            out["test"].append(g[-1])
+            out["train"].extend(g[:-1])
     return out
 
 
@@ -92,6 +102,7 @@ def main() -> int:
     ap.add_argument("--root", type=Path, default=DEFAULT_ROOT)
     ap.add_argument("--labels", nargs="+", default=[k for k, _ in DEFAULT_LABELS])
     ap.add_argument("--test-signer")
+    ap.add_argument("--train-only-signer", nargs="*", default=[])
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
     ap.add_argument("--report", type=Path, default=REPORT)
     ap.add_argument("--epochs", type=int, default=80)
@@ -107,7 +118,7 @@ def main() -> int:
     if missing:
         print(f"[!] no takes for {missing}: they are left out of the model")
     cls = {lb: i for i, lb in enumerate(labels)}
-    split = split_takes(takes, args.test_signer)
+    split = split_takes(takes, args.test_signer, set(args.train_only_signer))
     for k, v in split.items():
         print(f"{k}: {len(v)} takes, {sum(len(t) for t in v)} frames")
 
@@ -132,23 +143,32 @@ def main() -> int:
             opt.step()
         sched.step()
         model.eval()
+        if not split["val"]:
+            if ep % 10 == 0 or ep == args.epochs - 1:
+                print(f"epoch {ep:3d}  (no val set: keeping the last epoch)")
+            continue
         v = evaluate(model, split["val"], cls, labels)["frame_top1"]
         if v > best:
             best, best_state = v, {k: t.clone() for k, t in model.state_dict().items()}
         if ep % 10 == 0 or ep == args.epochs - 1:
             print(f"epoch {ep:3d}  val frame top-1 {v:.3f}")
-    model.load_state_dict(best_state)
+    if best_state is not None:
+        model.load_state_dict(best_state)
     model.eval()
 
     signers = sorted({t.signer for t in takes})
     report = {"labels": labels, "signers": signers, "test_signer": args.test_signer,
+              "train_only_signers": args.train_only_signer,
               "split": "held-out signer" if args.test_signer else "newest take per signer and letter",
+              "model_selection": "best val epoch" if split["val"] else "last epoch (no val set)",
+              "takes_per_letter": dict(sorted(Counter(t.label for t in takes).items())),
               "caveat": None if args.test_signer else
               "same signer(s) in train and test: does not measure accuracy for a new person",
               "val": evaluate(model, split["val"], cls, labels),
               "test": evaluate(model, split["test"], cls, labels)}
     save_letter_model(args.out, model, labels, args.hidden,
                       {"signers": signers, "test_signer": args.test_signer,
+                       "train_only_signers": args.train_only_signer,
                        "test_frame_top1": report["test"].get("frame_top1"), "seed": args.seed})
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, indent=1, ensure_ascii=False), encoding="utf-8")

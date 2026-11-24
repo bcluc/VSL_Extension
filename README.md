@@ -6,7 +6,8 @@ Repo gồm:
 1. **Nhận dạng bảng chữ cái VSL** (`signbridge/letters/`): MediaPipe lấy 21 điểm landmark của
    bàn tay → đặc trưng hình dạng bàn tay → MLP nhỏ → giữ tay để gõ chữ. Có bản chạy trong
    Microsoft Teams (`teams_app/`). Mô hình train trên dữ liệu bạn tự thu (chỉ lưu landmark,
-   không lưu ảnh). **Chưa có mô hình nào được train, chưa đo độ chính xác.**
+   không lưu ảnh). **Bản đầu tiên:** khoảng 50 % khung hình đúng với người lạ (2 người ký, đo
+   offline), chưa đo khi chạy live. Xem [docs/ai_validation_status.md](docs/ai_validation_status.md) §3.
 2. **Demo ASL chào hỏi** (`signbridge/signs/`): 29 ký hiệu ASL → câu tiếng Anh / tiếng Việt
    → giọng nói.
 3. **Lõi nghiên cứu `signbridge/`** cho dịch ngôn ngữ ký hiệu liên tục (CSLT): pipeline dữ liệu,
@@ -33,11 +34,56 @@ Mọi file model (`.pt`, `.task`, giọng Piper) nằm ở `../models/`, dataset
 Bộ nhãn mặc định gồm 23 chữ cái tĩnh (A B C D Đ E G H I K L M N O P Q R S T U V X Y) và 2 dấu:
 **Mũ** (A/E/O → Â/Ê/Ô) và **Râu** (O/U → Ơ/Ư). Chữ cần chuyển động và dấu thanh chưa hỗ trợ.
 
-```bash
-python -X utf8 scripts/record_letters.py --signer s01        # thu dữ liệu, chỉ lưu landmark
-python -X utf8 scripts/train_letter_classifier.py            # train, ra ../models/letters/vsl_letters.pt
-python -X utf8 scripts/live_letter_demo.py                   # demo webcam: giữ tay ~0,8 s để gõ
+### Chạy nhanh
+
+**1. Thử demo** (cần mô hình ở `../models/letters/vsl_letters.pt`):
+
+```powershell
+python -X utf8 scripts/live_letter_demo.py                   # giữ tay yên ~0,8 s để gõ một chữ
+python -X utf8 scripts/live_letter_demo.py --threshold 0.5   # nhận dạng yếu thì hạ ngưỡng (mặc định 0.6)
+python -X utf8 scripts/live_letter_demo.py --hold 1.0        # gõ nhầm nhiều thì giữ lâu hơn
 ```
+
+Phím: `SPACE` dấu cách, `BACKSPACE` xóa, `C` xóa hết, `Q` thoát. Hạ tay xuống (hoặc đổi chữ) để gõ
+lặp lại cùng một chữ.
+
+**2. Quay thêm rồi train lại** (cách cải thiện độ chính xác tốt nhất):
+
+```powershell
+python -X utf8 scripts/record_letters.py --signer s01        # số lượt cộng dồn với lần trước
+python -X utf8 scripts/train_letter_classifier.py --train-only-signer ext01
+```
+
+`--train-only-signer` dành cho người ký được nhập từ ảnh (`ext01`: mỗi chữ chỉ có 1 bản ghi). Họ
+chỉ dùng để học, không dùng để test. Thiếu cờ này trainer sẽ báo lỗi "need at least 2". Nếu
+chỉ có dữ liệu tự thu thì bỏ cờ đi.
+
+**3. Đo trên người lạ** (giữ nguyên một người để test):
+
+```powershell
+python -X utf8 scripts/train_letter_classifier.py --test-signer ext01 --out ../models/letters/exp.pt --report outputs/letters/exp.json
+```
+
+Dùng `--out` / `--report` riêng để không ghi đè mô hình đang dùng.
+
+**4. Nhập ảnh chữ cái có sẵn** (mỗi thư mục là một chữ, chỉ lưu landmark):
+
+```powershell
+python -X utf8 scripts/import_letter_images.py <thư_mục_ảnh> --signer ext02 --map Dd=DD Rau=RAU mu_=MU
+```
+
+`--map` đổi tên thư mục sang mã nhãn. Thêm `--mirror` nếu ảnh chưa lật gương.
+
+**5. Chạy trong Microsoft Teams / trình duyệt:**
+
+```powershell
+python teams_app/server.py      # https://localhost:53000/
+```
+
+Lỗi cổng 53000 đang bận thì tắt server cũ trước. Cài đặt Teams xem
+[teams_app/README.md](teams_app/README.md).
+
+### Chi tiết
 
 Thu dữ liệu (`record_letters.py`):
 
@@ -52,8 +98,10 @@ Train (`train_letter_classifier.py`):
 - Giữ lại nguyên lượt quay để làm val/test, ghi báo cáo vào `outputs/letters/train_report.json`.
 - Nếu chỉ một người thu, kết quả **không** phản ánh độ chính xác với người khác.
 - Thu thêm người và dùng `--test-signer s02` để đo trên người lạ.
-
-Microsoft Teams: xem [teams_app/README.md](teams_app/README.md).
+- Mỗi lần train ghi đè `../models/letters/vsl_letters.pt`. Muốn giữ bản cũ thì sao lưu trước
+  hoặc dùng `--out`.
+- Đọc `outputs/letters/train_report.json`: `per_label_frame_top1` (độ chính xác từng chữ),
+  `top_confusions` (cặp chữ hay nhầm), `caveat` (giới hạn của phép đo).
 
 ---
 

@@ -10,7 +10,7 @@
 Tensor-shape, mask and loss-is-finite checks are counted as **interface tests**, never as
 model validation.
 
-Sources: the code in `signbridge/`, `tests/` (143 tests, all passing on 2026-11-23),
+Sources: the code in `signbridge/`, `tests/` (146 tests, all passing on 2026-11-24),
 [validation_report.md](validation_report.md) and [tts_implementation.md](tts_implementation.md).
 
 ## 1. Summary
@@ -19,7 +19,7 @@ Sources: the code in `signbridge/`, `tests/` (143 tests, all passing on 2026-11-
 |---|---|---|---|---|
 | Video ingestion and preprocessing | yes | yes | yes (34 How2Sign clips, 1 full video) | n/a (no model) |
 | Hand keypoints (MediaPipe) | yes | — | yes: runs on 4 real clips, detection ratio measured | **no**: keypoint accuracy not compared with ground truth |
-| VSL fingerspelling (static letters, `signbridge/letters/`) | yes: recorder, trainer, live demo, Teams tab | yes (features, labels, checkpoint, typing, split; a synthetic 2-shape training check) | **no**: no letters recorded yet | **no**: no trained model, no accuracy. See §3. |
+| VSL fingerspelling (static letters, `signbridge/letters/`) | yes: recorder, importer, trainer, live demo, Teams tab | yes | yes: 2 signers (landmarks only) | **partly, offline**: about 50 % per frame on an unseen signer; 69 % on a later take of a training signer. Live not measured. See §3. |
 | CSLR (video → gloss sequence) | interface + untrained reference modules | yes | shapes only, on real batches | **no**: no training loop, no gloss data, no WER |
 | SLT (→ Vietnamese text) | interface + untrained reference module | yes | shapes only, on real How2Sign English batches | **no**: no training, no Vietnamese data, no BLEU |
 | TTS (Vietnamese text → speech) | **yes** (Piper, offline) | yes | yes: 8 hand-written Vietnamese sentences synthesized | **partly**: audio is produced, non-silent and finite; perceptual quality not rated |
@@ -47,7 +47,6 @@ Sources: the code in `signbridge/`, `tests/` (143 tests, all passing on 2026-11-
 |---|---|
 | VSL `continuous_csv` adapter (proposed layout) | no continuous VSL recordings exist yet |
 | VSL `letter_frames` adapter (image folders) | no VSL letter image folders are part of the project |
-| VSL fingerspelling module (`signbridge/letters/`) | no letters recorded yet |
 | Missing/corrupt-frame policies (`zero`, `drop`, `CorruptVideoError`) | the real clips had no corrupt frames |
 | `ManifestDataset` from an external JSONL | no external annotation export exists yet |
 | CTC greedy collapse rule | checked on a hand-built probability path; there are no trained outputs |
@@ -78,24 +77,45 @@ Sources: the code in `signbridge/`, `tests/` (143 tests, all passing on 2026-11-
 * **Live input:** webcam `FrameSource` for the CSLT path.
 * **Integration:** end-to-end application wiring (webcam → CSLR → SLT → TTS).
 
-## 3. VSL fingerspelling: not yet trained
+## 3. VSL fingerspelling: first measurements (2026-11-24)
 
-Design of `signbridge/letters/`:
+**Design of `signbridge/letters/`:**
+* MediaPipe hand landmarks → 83 hand-shape features (position- and size-invariant) → small MLP.
+* Version 2 features do not use MediaPipe's left/right label, which flipped between takes and
+  between frames. Training mirrors hands at random instead.
+* `scripts/record_letters.py` records landmarks only, never images.
+* `scripts/import_letter_images.py` converts image folders to landmark takes, one take per
+  folder.
+* `scripts/train_letter_classifier.py` holds out whole takes, or a whole signer.
 
-* MediaPipe hand landmarks → 83 hand-shape features (position-, size- and handedness-invariant)
-  → small MLP.
-* Data is recorded with `scripts/record_letters.py`, which stores landmarks only, never images.
-* `scripts/train_letter_classifier.py` holds out whole takes. With a single signer it reports
-  how well the model recognises **that signer**, not a new person. `--test-signer` holds out
-  a whole signer.
+**Data** (not in the repository, private research use only):
+* s01: the project owner, recorded with `record_letters.py`. 2 takes per letter (3 for A and
+  B), 3,518 frames.
+* ext01: a second signer, imported from an external image set with no license. 1 recording per
+  letter, 3,694 frames with a hand. Models trained on it must not be distributed.
 
-**Status on 2026-11-23:**
-* No letters have been recorded, so no model exists and **no accuracy has been measured**.
-* The live demo and the Teams tab refuse to recognise without a trained checkpoint.
-* The only evidence so far:
-  * unit tests on synthetic landmarks;
-  * a smoke run of the trainer on synthetic takes. It proves the code runs, not that the
-    model recognises VSL.
+**Results** (25 letters; frame top-1 / whole-take top-1):
+
+| Train → test | What it measures | Result |
+|---|---|---|
+| s01 → ext01 | unseen signer | 52.6 % / 13 of 25 |
+| ext01 → s01 | unseen signer | 49.9 % / 31 of 52 |
+| s01 older takes → s01 newest take | same signer, later take | 59.3 % / 17 of 25 |
+| **s01 older takes + ext01 → s01 newest take** (current model) | same signer, later take | **68.9 % / 18 of 25** |
+
+* **No validation set.** With 2 takes per letter there is none, so the weights after the last
+  epoch were kept and no model was selected on the test takes. The s01 → ext01 run used
+  s01's newest takes as its validation set.
+* **Errors:**
+  * still failing: Đ, H, M, N, P, S, T, X;
+  * N → Q in every run;
+  * Đ ↔ T / X across signers.
+* **Unverified:** whether both signers used the standard VSL handshapes.
+* **Limits:**
+  * very small test sets (25 takes);
+  * two signers only;
+  * the same-signer numbers overestimate accuracy for a new person;
+  * **live accuracy has not been measured.**
 
 ## 4. What may and may not be claimed today
 
@@ -109,4 +129,4 @@ Design of `signbridge/letters/`:
 | Any WER / BLEU / accuracy for CSLR or SLT | **No.** None has been measured. |
 | "The demo recognizes 29 ASL greeting signs from unseen signers" | Yes: about 83 % per sign and 88 % per word on 11 held-out ASL Citizen signers. Live accuracy with a real webcam user has not been measured. |
 | "The demo translates sign language" | **No.** Say "recognizes signs one at a time and composes a sentence from a fixed phrase table". |
-| "SignBridge recognizes the VSL alphabet" | **No, not yet.** The letter module exists but has no trained model or measured accuracy. |
+| "SignBridge recognizes the VSL alphabet" | **No.** A first model recognises about half of the frames of an unseen signer (2 signers, 25 static letters). Say "early prototype". |

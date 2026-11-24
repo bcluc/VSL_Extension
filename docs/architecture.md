@@ -173,4 +173,4 @@ Vietnamese text. See [tts_implementation.md](tts_implementation.md).
 | `signbridge/live_io.py` | newest-frame camera reader, cached Vietnamese text rendering, hand drawing |
 | `configs/preprocess_default.json` | default preprocessing config |
 | `scripts/` | `fetch_how2sign_subset.py`, `audit_how2sign.py`, `build_manifests.py`, `validate_pipeline.py` |
-| `tests/` | 143 tests: 127 without external data, 7 How2Sign (`-m realdata`), 1 PHOENIX (`-m phoenix`) and 8 real-voice TTS (`-m tts`); the marked tests skip when their data is absent |
+| `tests/` | 146 tests: 130 without external data, 7 How2Sign (`-m realdata`), 1 PHOENIX (`-m phoenix`) and 8 real-voice TTS (`-m tts`); the marked tests skip when their data is absent |
