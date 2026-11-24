@@ -5,7 +5,7 @@ Repo gồm:
 
 1. **Nhận dạng bảng chữ cái VSL** (`signbridge/letters/`): MediaPipe lấy 21 điểm landmark của
    bàn tay → đặc trưng hình dạng bàn tay → MLP nhỏ → giữ tay để gõ chữ. Có bản chạy trong
-   Microsoft Teams (`teams_app/`). Mô hình train trên dữ liệu bạn tự thu (chỉ lưu landmark,
+   Microsoft Teams (`teams_app/`: tab cá nhân và khung bên cạnh cuộc họp). Mô hình train trên dữ liệu bạn tự thu (chỉ lưu landmark,
    không lưu ảnh). **Bản đầu tiên:** khoảng 50 % khung hình đúng với người lạ (2 người ký, đo
    offline), chưa đo khi chạy live. Xem [docs/ai_validation_status.md](docs/ai_validation_status.md) §3.
 2. **Demo ASL chào hỏi** (`signbridge/signs/`): 29 ký hiệu ASL → câu tiếng Anh / tiếng Việt
@@ -160,7 +160,7 @@ Tài liệu: [docs/dataset_audit.md](docs/dataset_audit.md) ·
 │   ├── metrics/ tts/    # WER, giọng nói
 │   └── live_io.py       # camera (khung mới nhất), vẽ chữ tiếng Việt
 ├── scripts/             # thu dữ liệu, train, demo, tải dữ liệu, kiểm chứng
-├── teams_app/           # tab Microsoft Teams cho bảng chữ cái
+├── teams_app/           # Microsoft Teams: tab cá nhân + khung bên cạnh cuộc họp
 ├── tests/               # pytest (synthetic + realdata)
 ├── docs/                # audit dataset, kiến trúc, báo cáo kiểm chứng
 ├── configs/             # cấu hình tiền xử lý

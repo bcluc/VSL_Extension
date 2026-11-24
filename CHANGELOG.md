@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Microsoft Teams (`teams_app/`, package version 2.1.0)
+
+* **Meeting tab:** the side panel during a meeting, plus the meeting chat and details tab,
+  with a configuration page that checks the recognition server.
+* **Narrow layout** (≤ 520 px) for the side panel.
+* **Camera:** a picker when the computer has several cameras, and clear messages when the
+  camera is busy or not allowed.
+* **"Copy" button** for the typed text.
+* **Not yet verified inside a real Teams meeting.** In particular, sharing the webcam with the
+  meeting is untested.
+
 ## v0.1.0 (2026-11-23): first research release
 
 A research prototype, not a product. Every number below was measured offline. **No model has

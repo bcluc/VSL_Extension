@@ -75,10 +75,27 @@
     min-height: 44px; border: 1px dashed var(--line); border-radius: 6px; padding: 8px 10px;
     font-size: 20px; letter-spacing: .06em; word-break: break-all; background: var(--brand-soft);
   }
-  .typed:empty::before { content: "Giữ một ký hiệu ~1 giây để gõ…"; color: var(--muted); font-size: 13px; letter-spacing: 0; }
+  .typed:empty::before { content: "Giữ một ký hiệu ~0,8 giây để gõ…"; color: var(--muted); font-size: 13px; letter-spacing: 0; }
   .row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
   .err { color: #c50f1f; font-size: 13px; margin-top: 8px; }
   .hint { color: var(--muted); font-size: 12px; margin-top: 10px; }
+  select { max-width: 100%; }
+  /* Meeting side panel (~320 px wide) and other narrow windows */
+  @media (max-width: 520px) {
+    .wrap { padding: 8px; }
+    header { margin-bottom: 8px; }
+    header h1 { font-size: 15px; }
+    header .sub, .hint, #topkTitle, #topk { display: none; }
+    .grid { gap: 8px; }
+    .card { padding: 10px; }
+    .controls { gap: 6px; margin-top: 8px; }
+    .controls .stat { margin-left: 0; width: 100%; }
+    button, select { padding: 5px 9px; }
+    .result { padding: 0 0 6px; }
+    .letter { font-size: 56px; min-height: 60px; }
+    .typed { font-size: 18px; min-height: 40px; }
+    h2 { margin: 8px 0 6px; }
+  }
 </style>
 </head>
 <body>
@@ -101,6 +118,7 @@
       <div class="controls">
         <button class="primary" id="startBtn">Bật camera</button>
         <button id="pauseBtn" disabled>Tạm dừng</button>
+        <select id="cam" title="Chọn camera" hidden></select>
         <span class="inline" id="modelName">—</span>
         <label class="inline">Ngưỡng
           <input type="range" id="thr" min="0.2" max="0.9" step="0.05" value="0.6">
@@ -118,7 +136,7 @@
         <div class="pct" id="confPct">&nbsp;</div>
       </div>
 
-      <h2>Top 3</h2>
+      <h2 id="topkTitle">Top 3</h2>
       <ul class="topk" id="topk"></ul>
 
       <h2>Văn bản</h2>
@@ -127,6 +145,7 @@
         <button id="spaceBtn">Dấu cách</button>
         <button id="backBtn">Xóa 1 ký tự</button>
         <button id="clearBtn">Xóa hết</button>
+        <button class="primary" id="copyBtn">Sao chép</button>
       </div>
       <div class="hint">Ảnh webcam chỉ gửi tới server trên máy này (localhost), không lưu lại.</div>
     </aside>
@@ -174,11 +193,20 @@
   async function start() {
     hideErr();
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false });
+      const deviceId = $("cam").value;
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 640, height: 480, ...(deviceId ? { deviceId: { exact: deviceId } } : {}) }, audio: false });
     } catch (e) {
-      showErr("Không mở được camera (" + e.name + "). Trong Teams, hãy cho phép quyền Camera cho ứng dụng này.");
+      const why = {
+        NotAllowedError: "chưa được cấp quyền. Hãy cho phép camera (quyền Media) cho ứng dụng này trong Teams hoặc trình duyệt.",
+        NotReadableError: "camera đang bận (có thể cuộc họp đang dùng). Tắt camera trong cuộc họp hoặc chọn camera khác.",
+        OverconstrainedError: "camera đã chọn không còn. Chọn lại camera.",
+        NotFoundError: "không tìm thấy camera nào.",
+      }[e.name] || e.name;
+      showErr("Không mở được camera: " + why);
       return;
     }
+    listCameras();
     video.srcObject = stream;
     await video.play();
     $("empty").hidden = true;
@@ -197,6 +225,14 @@
     $("pauseBtn").disabled = true; $("pauseBtn").textContent = "Tạm dừng";
     octx.clearRect(0, 0, overlay.width, overlay.height);
   }
+  async function listCameras() {
+    const sel = $("cam"), cur = stream && stream.getVideoTracks()[0]?.getSettings().deviceId;
+    const cams = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "videoinput");
+    sel.innerHTML = "";
+    cams.forEach((c, i) => sel.add(new Option(c.label || "Camera " + (i + 1), c.deviceId, false, c.deviceId === cur)));
+    sel.hidden = cams.length < 2;
+  }
+  $("cam").onchange = () => { if (running) { stop(); start(); } };
   $("startBtn").onclick = () => running ? stop() : start();
   $("startBtn2").onclick = start;
   $("pauseBtn").onclick = () => {
@@ -313,6 +349,18 @@
   $("spaceBtn").onclick = () => { $("typed").textContent += " "; };
   $("backBtn").onclick = () => { $("typed").textContent = $("typed").textContent.slice(0, -1); };
   $("clearBtn").onclick = () => { $("typed").textContent = ""; buf = []; };
+  $("copyBtn").onclick = async () => {
+    const text = $("typed").textContent;
+    if (!text) return;
+    try { await navigator.clipboard.writeText(text); }
+    catch {                                   // Teams webviews may block the async clipboard API
+      const r = document.createRange(); r.selectNodeContents($("typed"));
+      const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+      document.execCommand("copy"); s.removeAllRanges();
+    }
+    $("copyBtn").textContent = "Đã chép ✓";
+    setTimeout(() => { $("copyBtn").textContent = "Sao chép"; }, 1500);
+  };
 
   function showErr(m) { $("err").textContent = m; $("err").hidden = false; }
   function hideErr() { $("err").hidden = true; }

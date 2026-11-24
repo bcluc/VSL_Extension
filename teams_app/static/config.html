@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VSL Letters setup</title>
+<script src="https://unpkg.com/@microsoft/teams-js@2.24.0/dist/MicrosoftTeams.min.js" crossorigin="anonymous"></script>
+<style>
+  :root { --bg: #ffffff; --text: #242424; --muted: #616161; --brand: #5b5fc7; --err: #c50f1f; }
+  :root[data-theme="dark"] { --bg: #292929; --text: #ffffff; --muted: #adadad; --brand: #7f85f5; --err: #f1707b; }
+  :root[data-theme="contrast"] { --bg: #000; --text: #fff; --muted: #fff; --brand: #ffff01; --err: #ffff01; }
+  body { margin: 0; padding: 20px; background: var(--bg); color: var(--text);
+         font: 14px/1.5 "Segoe UI", system-ui, sans-serif; }
+  h1 { font-size: 18px; margin: 0 0 8px; color: var(--brand); }
+  p { margin: 6px 0; color: var(--muted); }
+  ul { margin: 6px 0; padding-left: 20px; }
+  #status { margin-top: 12px; }
+  #status.err { color: var(--err); }
+</style>
+</head>
+<body>
+  <h1>Ký hiệu chữ cái VSL trong cuộc họp</h1>
+  <p>Thêm một khung bên cạnh cuộc họp: ký chữ cái trước webcam, chữ nhận dạng được hiện ngay trong
+     khung để bạn sao chép vào chat.</p>
+  <ul>
+    <li>Nhận dạng chạy trên server của máy bạn (<span id="origin"></span>).</li>
+    <li>Nếu cuộc họp đang dùng camera và khung báo "camera đang bận", hãy tắt camera trong cuộc họp
+        hoặc chọn camera khác trong khung.</li>
+  </ul>
+  <p id="status">Đang kiểm tra server…</p>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  $("origin").textContent = location.origin;
+  const setTheme = t => { document.documentElement.dataset.theme = t === "default" ? "light" : t; };
+
+  // Check the recognition server so the user knows before saving
+  fetch("api/models").then(r => r.json()).then(d => {
+    $("status").textContent = d.ready ? "Server sẵn sàng: " + d.name + ". Bấm Lưu để thêm."
+                                      : "Server chạy nhưng chưa có mô hình. Vẫn có thể thêm, nhưng chưa nhận dạng được.";
+  }).catch(() => {
+    $("status").textContent = "Không kết nối được server. Chạy: python teams_app/server.py";
+    $("status").className = "err";
+  });
+
+  if (!window.microsoftTeams) return;
+  microsoftTeams.app.initialize().then(() => {
+    microsoftTeams.app.getContext().then(ctx => setTheme(ctx.app.theme));
+    microsoftTeams.app.registerOnThemeChangeHandler(setTheme);
+    microsoftTeams.pages.config.registerOnSaveHandler(saveEvent => {
+      microsoftTeams.pages.config.setConfig({
+        entityId: "vsl-letters-meeting",
+        contentUrl: location.origin + "/?inTeams=1&panel=1",
+        websiteUrl: location.origin + "/",
+        suggestedDisplayName: "Ký hiệu VSL",
+      }).then(() => saveEvent.notifySuccess())
+        .catch(e => saveEvent.notifyFailure(String(e)));
+    });
+    microsoftTeams.pages.config.setValidityState(true);
+    microsoftTeams.app.notifySuccess();
+  }).catch(e => console.warn("Teams SDK init failed", e));
+})();
+</script>
+</body>
+</html>

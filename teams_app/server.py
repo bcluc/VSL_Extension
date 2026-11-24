@@ -58,6 +58,12 @@ def index():
     return FileResponse(APP_DIR / "static" / "index.html")
 
 
+@app.get("/config")
+def config():
+    """Teams tab configuration page (shown when the app is added to a meeting)."""
+    return FileResponse(APP_DIR / "static" / "config.html")
+
+
 @app.get("/privacy", response_class=HTMLResponse)
 def privacy():
     return ("<h1>Privacy</h1><p>Local research demo. Webcam frames are sent only to "

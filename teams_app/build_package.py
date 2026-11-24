@@ -6,6 +6,9 @@ Build the Microsoft Teams app package (zip) for sideloading.
 
 Output: teams_app/build/vsl-teams-app.zip  (manifest.json + color.png + outline.png)
 Upload it in Teams: Apps -> Manage your apps -> Upload an app -> Upload a custom app.
+
+The app has a personal tab and a meeting tab (side panel during the meeting, plus the meeting
+chat/details tab). Add it to a meeting with "+ Apps" in the meeting window.
 """
 
 import argparse
@@ -19,7 +22,7 @@ from PIL import Image, ImageDraw, ImageFont
 APP_DIR = Path(__file__).resolve().parent
 BUILD = APP_DIR / "build"
 APP_ID = "c722f7e1-97d5-4000-9760-8ec0f8ab3df8"   # keep stable so re-uploads update the same app
-VERSION = "2.0.0"
+VERSION = "2.1.0"
 BRAND = (91, 95, 199)                               # Teams purple
 
 
@@ -87,6 +90,14 @@ def manifest(base):
                 "scopes": ["personal"],
             },
             {"entityId": "about", "scopes": ["personal"]},
+        ],
+        "configurableTabs": [
+            {
+                "configurationUrl": f"{base}/config?inTeams=1",
+                "canUpdateConfiguration": True,
+                "scopes": ["groupChat"],
+                "context": ["meetingSidePanel", "meetingChatTab", "meetingDetailsTab"],
+            },
         ],
         "permissions": ["identity"],
         "devicePermissions": ["media"],
